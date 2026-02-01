@@ -252,8 +252,26 @@ function displayLeaderboard(rankings) {
     
     rankings.forEach((entry, index) => {
         const li = document.createElement('li');
-        const date = new Date(entry.created_at);
-        const formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+        
+        // デバッグ情報
+        console.log('Entry:', entry);
+        
+        let formattedDate = '';
+        if (entry.created_at) {
+            try {
+                const date = new Date(entry.created_at);
+                if (!isNaN(date.getTime())) {
+                    formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+                } else {
+                    formattedDate = '日付不明';
+                }
+            } catch (error) {
+                console.error('Date parsing error:', error);
+                formattedDate = '日付エラー';
+            }
+        } else {
+            formattedDate = '日付なし';
+        }
         
         li.innerHTML = `
             <strong>${index + 1}位:</strong> ${entry.name} - ${entry.score}点
