@@ -2,10 +2,37 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
-import json
+from datetime import datetime
+from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 import os
 
 app = FastAPI()
+
+# データベース設定
+DATA_DIR = "data"
+DB_PATH = os.path.join(DATA_DIR, "database.db")
+
+# データディレクトリを作成
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# データベースエンジン
+engine = create_engine(f"sqlite:///{DB_PATH}")
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# データベースモデル
+class Score(Base):
+    __tablename__ = "scores"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    score = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# テーブルを作成
+Base.metadata.create_all(bind=engine)
 
 # CORS設定
 app.add_middleware(
@@ -17,57 +44,77 @@ app.add_middleware(
 )
 
 # スコアデータモデル
-class Score(BaseModel):
+class ScoreRequest(BaseModel):
     name: str
     score: int
 
-class LeaderboardEntry(BaseModel):
+class ScoreResponse(BaseModel):
+    id: int
     name: str
     score: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
 
-# ランキング保存先ファイル
-RANKING_FILE = "rankings.json"
-
-def load_rankings():
-    """ランキングを読み込む"""
-    if os.path.exists(RANKING_FILE):
-        try:
-            with open(RANKING_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return []
-    return []
-
-def save_rankings(rankings):
-    """ランキングを保存する"""
-    with open(RANKING_FILE, "w", encoding="utf-8") as f:
-        json.dump(rankings, f, ensure_ascii=False, indent=2)
+def get_db():
+    """データベースセッションを取得"""
+    db = SessionLocal()
+    try:
+        return db
+    finally:
+        pass
 
 @app.get("/")
 def read_root():
     return {"message": "Action Game Leaderboard API"}
 
 @app.post("/submit")
-def submit_score(score: Score):
+def submit_score(score_request: ScoreRequest):
     """スコアを提出し、ランキングを更新"""
-    rankings = load_rankings()
+    db = get_db()
     
-    # 新しいスコアを追加
-    rankings.append({"name": score.name, "score": score.score})
+    # 新しいスコアをデータベースに保存
+    new_score = Score(name=score_request.name, score=score_request.score)
+    db.add(new_score)
+    db.commit()
+    db.refresh(new_score)
     
-    # スコアで降順にソートし、上位5名を保持
-    rankings.sort(key=lambda x: x["score"], reverse=True)
-    rankings = rankings[:5]
+    # 上位5名を取得
+    top_scores = db.query(Score).order_by(Score.score.desc()).limit(5).all()
     
-    # 保存
-    save_rankings(rankings)
+    # レスポンス形式に変換
+    rankings = [
+        {
+            "id": score.id,
+            "name": score.name,
+            "score": score.score,
+            "created_at": score.created_at.isoformat()
+        }
+        for score in top_scores
+    ]
     
     return {"message": "Score submitted successfully", "rankings": rankings}
 
 @app.get("/rankings")
 def get_rankings():
     """現在のランキングを取得"""
-    rankings = load_rankings()
+    db = get_db()
+    
+    # 上位5名を取得
+    top_scores = db.query(Score).order_by(Score.score.desc()).limit(5).all()
+    
+    # レスポンス形式に変換
+    rankings = [
+        {
+            "id": score.id,
+            "name": score.name,
+            "score": score.score,
+            "created_at": score.created_at.isoformat()
+        }
+        for score in top_scores
+    ]
+    
     return {"rankings": rankings}
 
 if __name__ == "__main__":

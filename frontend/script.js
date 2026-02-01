@@ -252,8 +252,12 @@ function displayLeaderboard(rankings) {
     
     rankings.forEach((entry, index) => {
         const li = document.createElement('li');
+        const date = new Date(entry.created_at);
+        const formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+        
         li.innerHTML = `
             <strong>${index + 1}位:</strong> ${entry.name} - ${entry.score}点
+            <br><small style="opacity: 0.7;">${formattedDate}</small>
         `;
         leaderboardList.appendChild(li);
     });

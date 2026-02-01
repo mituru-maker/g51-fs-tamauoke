@@ -44,6 +44,7 @@ yarn-error.log*
 # Backend specific
 rankings.json
 *.log
+data/
 
 # Frontend specific
 *.tmp
